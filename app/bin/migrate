@@ -1,0 +1,88 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Application;
+use App\Database\MigrationRunner;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+$app = Application::boot(dirname(__DIR__));
+$config = $app->config['database'];
+
+$runner = new MigrationRunner(
+    $app->db->getDatabaseManager(),
+    $config['migrations']['path'],
+    $config['migrations']['table'],
+);
+
+$command = $argv[1] ?? 'help';
+
+switch ($command) {
+    case 'migrate':
+        $done = $runner->migrate();
+        echo $done === [] ? "Nothing to migrate.\n" : '';
+        foreach ($done as $name) {
+            echo "  MIGRATED  {$name}\n";
+        }
+        break;
+
+    case 'rollback':
+        $steps = isset($argv[2]) ? (int) $argv[2] : 0;
+        $done = $runner->rollback($steps);
+        echo $done === [] ? "Nothing to rollback.\n" : '';
+        foreach ($done as $name) {
+            echo "  ROLLED BACK  {$name}\n";
+        }
+        break;
+
+    case 'reset':
+        foreach ($runner->reset() as $name) {
+            echo "  ROLLED BACK  {$name}\n";
+        }
+        break;
+
+    case 'fresh':
+        $runner->reset();
+        foreach ($runner->migrate() as $name) {
+            echo "  MIGRATED  {$name}\n";
+        }
+        break;
+
+    case 'status':
+        foreach ($runner->status() as $row) {
+            printf("  %-6s %-60s %s\n", $row['ran'] ? 'Ran' : 'Pending', $row['name'], $row['batch'] ? "[batch {$row['batch']}]" : '');
+        }
+        break;
+
+    case 'make':
+        if (empty($argv[2])) {
+            fwrite(STDERR, "Usage: bin/migrate make <name> [--create=table | --table=table]\n");
+            exit(1);
+        }
+        $create = $table = null;
+        foreach (array_slice($argv, 3) as $arg) {
+            if (str_starts_with($arg, '--create=')) {
+                $create = substr($arg, 9);
+            } elseif (str_starts_with($arg, '--table=')) {
+                $table = substr($arg, 8);
+            }
+        }
+        echo 'Created: ' . $runner->make($argv[2], $create ?? $table, $create !== null) . "\n";
+        break;
+
+    default:
+        echo <<<TXT
+Usage: bin/migrate <command>
+
+  migrate               Run all pending migrations
+  rollback [steps]      Roll back the last batch (or the last N migrations)
+  reset                 Roll back all migrations
+  fresh                 Roll back everything and migrate again
+  status                Show migration status
+  make <name> [--create=table|--table=table]   Create a new migration file
+
+TXT;
+        exit($command === 'help' ? 0 : 1);
+}

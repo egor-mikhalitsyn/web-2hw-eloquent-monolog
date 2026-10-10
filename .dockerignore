@@ -2,3 +2,7 @@
 .env
 vendor
 .DS_Store
+.tools/
+app/vendor/
+app/.env
+app/storage/logs/

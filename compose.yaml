@@ -47,7 +47,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       LOG_MAX_FILES: ${LOG_MAX_FILES:-14}
       LOG_QUERIES: ${LOG_QUERIES:-true}
-      LOG_BODY_MAX_BYTES: ${LOG_BODY_MAX_BYTES:-10240}
+      LOG_BODY_MAX_BYTES: ${LOG_BODY_MAX_BYTES:-0}
     depends_on:
       postgres:
         condition: service_healthy

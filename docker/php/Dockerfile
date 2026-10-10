@@ -14,11 +14,13 @@ ARG GID=1000
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq-dev \
         libicu-dev \
+        libonig-dev \
         libzip-dev \
         libfcgi-bin \
     && docker-php-ext-install -j"$(nproc)" pdo_pgsql \
     && docker-php-ext-install -j"$(nproc)" intl \
     && docker-php-ext-install -j"$(nproc)" zip \
+    && docker-php-ext-install -j"$(nproc)" mbstring \
     && rm -rf /var/lib/apt/lists/*
 
 # Composer берём готовым бинарником из официального образа —
