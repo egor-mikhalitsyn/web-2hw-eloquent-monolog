@@ -1,0 +1,5 @@
+# Все текстовые файлы — с LF, независимо от core.autocrlf на Windows.
+# Без этого git на Windows может при checkout проставить CRLF в Dockerfile/Makefile/
+# конфигах/SQL, а внутри Linux-контейнеров (в т.ч. через WSL2) это ломает парсинг
+# (например nginx/postgresql.conf или Makefile с CR в конце строк).
+* text=auto eol=lf

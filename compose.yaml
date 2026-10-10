@@ -1,0 +1,91 @@
+services:
+  nginx:
+    build:
+      context: ./docker/nginx
+    # build + image одновременно: собирается локально, но с тем же тегом,
+    # под которым образ будет виден в `docker images` (пригодится и для CI)
+    image: ${DOCKERHUB_NAMESPACE}/devops-course-nginx:${IMAGE_TAG}
+    ports:
+      - "127.0.0.1:${NGINX_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      # Тот же код, что и в php, тем же путём — иначе SCRIPT_FILENAME не совпадёт
+      - ./app:/var/www/html:ro
+    depends_on:
+      php:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/nginx-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  php:
+    build:
+      context: ./docker/php
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: ${DOCKERHUB_NAMESPACE}/devops-course-php:${IMAGE_TAG}
+    volumes:
+      # Без :ro — сюда пишет composer install (vendor/)
+      - ./app:/var/www/html
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/zz-custom.ini:ro
+      - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf:ro
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_CONNECTION: pgsql
+      # Приложение: Eloquent + Monolog (логи пишутся в ./app/storage/logs/)
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      LOG_MAX_FILES: ${LOG_MAX_FILES:-14}
+      LOG_QUERIES: ${LOG_QUERIES:-true}
+      LOG_BODY_MAX_BYTES: ${LOG_BODY_MAX_BYTES:-10240}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Дёргаем встроенный ping-эндпоинт php-fpm через FastCGI напрямую, без nginx
+      test: ["CMD-SHELL", "SCRIPT_NAME=/ping SCRIPT_FILENAME=/ping REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000 | grep -q pong"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  postgres:
+    build:
+      context: ./docker/postgres
+    image: ${DOCKERHUB_NAMESPACE}/devops-course-postgres:${IMAGE_TAG}
+    # Свой конфиг вместо дефолтного $PGDATA/postgresql.conf
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # В postgres 18 точка монтирования данных — /var/lib/postgresql (без /data),
+      # PGDATA по умолчанию указывает на подпапку внутри неё
+      - pgdata:/var/lib/postgresql
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Публикуем на хост для подключения GUI-клиентом
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  pgdata:

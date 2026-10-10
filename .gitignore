@@ -1,0 +1,12 @@
+.env
+app/.env
+app/vendor/
+app/storage/logs/*
+!app/storage/logs/.gitkeep
+app/database/*.sqlite
+.idea/
+.vscode/
+.DS_Store
+
+.tools/
+app/database/*.sqlite-*
